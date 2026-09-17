@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayCenter ZTK Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding-right: 27%;
+      font-family: sans-serif;
+    }
+
+    /* Background on its own fixed compositor layer — never repaints on interaction */
+    #bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background: url('images/JHBackground.png') center center / cover no-repeat;
+      will-change: transform;
+    }
+
+    /* ── Phone frame ── */
+    .phone-frame {
+      position: relative;
+      width: 290px;
+      height: 684px;
+      background: #1c1c1e;
+      border-radius: 44px;
+      box-shadow: 0 0 0 2px #3a3a3c, 0 20px 60px rgba(0, 0, 0, 0.6);
+      will-change: transform; /* own GPU layer — isolates from background */
+    }
+
+    .phone-notch {
+      position: relative;
+      width: 100px;
+      height: 24px;
+      background: #1c1c1e;
+      border-radius: 0 0 16px 16px;
+      margin: 0 auto;
+      z-index: 2;
+    }
+
+    .home-bar {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90px;
+      height: 4px;
+      background: #3a3a3c;
+      border-radius: 2px;
+    }
+
+    /* ── Phone screen (carousel viewport) ── */
+    .phone-screen {
+      position: absolute;
+      inset: 48px 12px 60px 12px;
+      overflow: hidden;
+      background: transparent;
+      border-radius: 4px;
+    }
+
+    /* ── Carousel slides ── */
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transition: transform 300ms ease-in-out;
+      border: none;
+      outline: none;
+      box-shadow: none;
+    }
+
+    /* ── Click zone (right 50% of screen) ── */
+    .click-zone {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 50%;
+      height: 100%;
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    /* ── Left zone ── */
+    .left-zone {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 50%;
+      height: 100%;
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    /* ── GET STARTED CTA hotspot (active on all carousel screens) ── */
+    #cta-hotspot {
+      position: absolute;
+      top: 87.1%;
+      left: 19.2%;
+      width: 62.3%;
+      height: 5%;
+      z-index: 11;
+      pointer-events: none;
+      cursor: pointer;
+      border: none;
+      outline: none;
+    }
+
+    /* ── Kill 300ms tap delay on all interactive zones ── */
+    #click-zone, #left-zone, #cta-hotspot, #accept-hotspot, #smb-cta-hotspot, #smb-accept-hotspot {
+      touch-action: manipulation;
+    }
+
+    /* ── Accept & Continue hotspot (active only on T&C screen) ── */
+    /* Button measured at y=1672–1766 in 1792px image; aspect ratios match → no letterboxing */
+    #accept-hotspot {
+      position: absolute;
+      top: 93.4%;
+      left: 3.3%;
+      width: 93.9%;
+      height: 5.3%;
+      z-index: 12;
+      pointer-events: none;
+      cursor: pointer;
+    }
+
+    /* ── Extended flow hotspots (Choose 01/02, Select Account 01/02) ── */
+    #choose-radio-hotspot, #choose-continue-hotspot,
+    #select-radio-hotspot, #select-continue-hotspot {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      pointer-events: none;
+      cursor: pointer;
+      z-index: 11;
+      touch-action: manipulation;
+    }
+    #choose-radio-hotspot    { top: 33.1%; height: 2.4%; left: 90.9%; width:  5.1%; }
+    #choose-continue-hotspot { top: 93.2%; height: 5.5%; left:  3.3%; width: 93.7%; }
+    #select-radio-hotspot    { top: 29.3%; height:   2%; left: 92.9%; width:    5%; }
+    #select-continue-hotspot { top: 89.5%; height: 5.3%; left:  3%;   width: 94.2%; }
+
+    /* ── ZRC / contacts flow hotspots (006) ── */
+    #congrats-cta-hotspot,
+    #zrc-access-hotspot,
+    #allow-contacts-01-hotspot,
+    #allow-contacts-02-hotspot,
+    #how-share-hotspot,
+    #select-continue-06-hotspot,
+    #allow-15-hotspot {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      pointer-events: none;
+      cursor: pointer;
+      z-index: 11;
+      touch-action: manipulation;
+    }
+    #congrats-cta-hotspot       { top: 80.8%; height: 5.5%; left:  3%;   width: 94%;   }
+    #zrc-access-hotspot         { top: 80.6%; height: 5.1%; left:  5.9%; width: 88.2%; }
+    #allow-contacts-01-hotspot  { top: 89.5%; height: 5.3%; left:  7.6%; width: 85%;   }
+    #allow-contacts-02-hotspot  { top: 59.6%; height: 5.4%; left: 51.3%; width: 33.6%; }
+    #how-share-hotspot          { top: 81.4%; height: 6.3%; left:  8.1%; width: 83.3%; }
+    #select-continue-06-hotspot { top: 84.3%; height: 5.8%; left:  7.4%; width: 85.7%; }
+    #allow-15-hotspot           { top: 82.2%; height: 6.6%; left:  8.6%; width: 83.1%; }
+
+    /* ── SMB flow hotspots (calibrated) ── */
+    #smb-cta-hotspot,
+    #smb-accept-hotspot,
+    #smb-choose-radio-hotspot,
+    #smb-select-primary-radio-hotspot,
+    #smb-choose-continue-hotspot,
+    #smb-auth-03-radio-hotspot,
+    #smb-auth-04-continue-hotspot,
+    #smb-select-primary-continue-hotspot,
+    #smb-congrats-cta-hotspot,
+    #smb-auth-otp-01-continue-hotspot,
+    #smb-auth-otp-02-continue-hotspot,
+    #smb-zelle-tag-intro-cta-hotspot,
+    #smb-create-tag-01-continue-hotspot,
+    #smb-create-tag-02-continue-hotspot,
+    #smb-create-tag-03-cta-hotspot,
+    #smb-create-tag-04-continue-hotspot,
+    #smb-create-tag-05-finish-hotspot {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      pointer-events: none;
+      cursor: pointer;
+      z-index: 11;
+      touch-action: manipulation;
+    }
+
+    #smb-cta-hotspot                      { top: 86.9%; height: 5.4%; left: 19.2%; width: 62.3%; }
+    #smb-accept-hotspot                   { top: 93.6%; height: 5%;   left: 2.8%;  width: 94.7%; }
+    #smb-choose-radio-hotspot             { top: 59.2%; height: 2.3%; left: 90.7%; width: 4.8%; }
+    #smb-select-primary-radio-hotspot     { top: 32.5%; height: 2.6%; left: 92.4%; width: 6%; }
+    #smb-choose-continue-hotspot          { top: 92.9%; height: 6.1%; left: 2.8%;  width: 93.9%; }
+    #smb-auth-03-radio-hotspot             { top: 31%;   height: 2.5%; left: 90.9%; width: 6.6%; }
+    #smb-auth-04-continue-hotspot          { top: 89.4%; height: 5.3%; left: 2.8%;  width: 93.9%; }
+    #smb-select-primary-continue-hotspot  { top: 89.4%; height: 5.6%; left: 3.5%;  width: 93.5%; }
+    #smb-congrats-cta-hotspot             { top: 80.7%; height: 5.7%; left: 2.8%;  width: 94.2%; }
+    #smb-auth-otp-01-continue-hotspot     { top: 27.7%; height: 7.1%; left: 17.3%; width: 10.6%; }
+    #smb-auth-otp-02-continue-hotspot     { top: 89.4%; height: 5.6%; left: 2.8%;  width: 94.7%; }
+    #smb-zelle-tag-intro-cta-hotspot      { top: 90.6%; height: 2.1%; left: 38.8%; width: 22.4%; }
+    #smb-create-tag-01-continue-hotspot   { top: 37%;   height: 3.2%; left: 2.1%;  width: 93.2%; }
+    #smb-create-tag-02-continue-hotspot   { top: 89.3%; height: 5.7%; left: 2.8%;  width: 94.7%; }
+    #smb-create-tag-03-cta-hotspot        { top: 37.7%; height: 2.8%; left: 1.3%;  width: 96.2%; }
+    #smb-create-tag-04-continue-hotspot   { top: 89.3%; height: 5.8%; left: 2.1%;  width: 95.6%; }
+    #smb-create-tag-05-finish-hotspot     { top: 89%;   height: 6%;   left: 2.5%;  width: 95.2%; }
+
+    /* ── Send Payment flow hotspots ── */
+    #sp-send-hotspot,
+    #sp-scam-checkbox-hotspot,
+    #sp-scam-gotit-hotspot,
+    #sp-recipient-name-hotspot,
+    #sp-recipient-next-hotspot,
+    #sp-recipient-zelletag-hotspot,
+    #sp-recipient-addcontinue-hotspot,
+    #sp-recipient-yes-hotspot,
+    #sp-amount-area-hotspot,
+    #sp-amount-review-hotspot,
+    #sp-review-send-hotspot,
+    #sp-otp-area-hotspot,
+    #sp-otp-verify-hotspot,
+    #sp-keepsafe-send-hotspot,
+    #sp-alldone-hotspot {
+      position: absolute;
+      pointer-events: none;
+      cursor: pointer;
+      z-index: 11;
+      touch-action: manipulation;
+    }
+
+    #sp-send-hotspot                     { top: 17%;   height: 21%;  left: 0;   width: 100%; }
+    #sp-scam-checkbox-hotspot            { top: 85.3%; height: 2%;   left: 21.9%; width: 3.3%; }
+    #sp-scam-gotit-hotspot               { top: 89.5%; height: 5.4%; left: 3%;  width: 93.7%; }
+    #sp-recipient-name-hotspot           { top: 11%;   height: 6%;   left: 3%;  width: 94%;  }
+    #sp-recipient-next-hotspot           { top: 89.4%; height: 5.5%; left: 3%;  width: 94%;  }
+    #sp-recipient-zelletag-hotspot       { top: 28%;   height: 7.2%; left: 2.8%; width: 93.7%; }
+    #sp-recipient-addcontinue-hotspot    { top: 89.2%; height: 5.5%; left: 3.3%; width: 93.9%; }
+    #sp-recipient-yes-hotspot            { top: 85.6%; height: 5.5%; left: 7.6%; width: 85.3%; }
+    #sp-amount-area-hotspot              { top: 31.6%; height: 7.8%; left: 40.2%; width: 16.9%; }
+    #sp-amount-review-hotspot            { top: 89.3%; height: 5.5%; left: 2.8%; width: 93.9%; }
+    #sp-review-send-hotspot              { top: 88.3%; height: 5.2%; left: 2.5%; width: 95%;  }
+    #sp-otp-area-hotspot                 { top: 70%;   height: 10%;  left: 15%; width: 70%;  }
+    #sp-otp-verify-hotspot               { top: 85%;   height: 7%;   left: 50%; width: 45%;  }
+    #sp-keepsafe-send-hotspot            { top: 85%;   height: 6%;   left: 8%;  width: 84%;  }
+    #sp-alldone-hotspot                  { top: 89.5%; height: 5.3%; left: 2.8%; width: 94.7%; }
+
+    /* ── Activity flow hotspots ── */
+    #act-landing-activity-hotspot,
+    #act-payment-back-hotspot,
+    #act-payment-request-toggle-hotspot,
+    #act-row-bourbon-hotspot,
+    #act-row-kerryking-hotspot,
+    #act-row-cigarplace-hotspot,
+    #act-row-dogwalk-hotspot,
+    #act-row-metalman-hotspot,
+    #act-request-back-hotspot,
+    #act-request-payment-toggle-hotspot,
+    #act-row-dimmuborger-request-hotspot,
+    #act-row-kerryking-request-1-hotspot,
+    #act-row-kerryking-request-2-hotspot,
+    #act-detail-back-hotspot {
+      position: absolute;
+      pointer-events: none;
+      cursor: pointer;
+      z-index: 11;
+      touch-action: manipulation;
+    }
+
+    #act-landing-activity-hotspot        { top: 66.5%; height: 25.2%; left: 0.6%; width: 99.3%; }
+    #act-payment-back-hotspot            { top: 8%;    height: 3%;    left: 2.8%; width: 6%;    }
+    #act-payment-request-toggle-hotspot  { top: 12.5%; height: 4.9%;  left: 51.1%; width: 48.3%; }
+    #act-row-bourbon-hotspot             { top: 23.9%; height: 10.1%; left: 0.4%; width: 98.8%; }
+    #act-row-kerryking-hotspot           { top: 40.7%; height: 8.9%;  left: 0;    width: 100%;  }
+    #act-row-cigarplace-hotspot          { top: 49.7%; height: 9.5%;  left: 0.4%; width: 99%;   }
+    #act-row-dogwalk-hotspot             { top: 59.3%; height: 9.6%;  left: 0.6%; width: 99.3%; }
+    #act-row-metalman-hotspot            { top: 69.1%; height: 9.4%;  left: 0.6%; width: 99.3%; }
+    #act-request-back-hotspot            { top: 8%;    height: 3%;    left: 2.8%; width: 6%;    }
+    #act-request-payment-toggle-hotspot  { top: 12.2%; height: 5.3%;  left: 0.6%; width: 49.5%; }
+    #act-row-dimmuborger-request-hotspot { top: 23.2%; height: 13.5%; left: 0.8%; width: 98.8%; }
+    #act-row-kerryking-request-1-hotspot { top: 42.2%; height: 10.2%; left: 1.1%; width: 98.5%; }
+    #act-row-kerryking-request-2-hotspot { top: 52.4%; height: 9.3%;  left: 0.6%; width: 98.6%; }
+    #act-detail-back-hotspot             { top: 8.2%;  height: 2.5%;  left: 3.3%; width: 5%;    }
+
+    /* ── Manage Recipients flow hotspots ── */
+    #mr-landing-icon-hotspot,
+    #mr-list-back-hotspot,
+    #mr-row-bourbon-hotspot,
+    #mr-row-cigarplace-hotspot,
+    #mr-row-dogwalk-hotspot,
+    #mr-row-metalman-hotspot,
+    #mr-detail-back-hotspot {
+      position: absolute;
+      pointer-events: none;
+      cursor: pointer;
+      z-index: 11;
+      touch-action: manipulation;
+    }
+
+    #mr-landing-icon-hotspot   { top: 94.9%; height: 2.3%; left: 54%;  width: 8.7%; }
+    #mr-list-back-hotspot      { top: 8%;    height: 3%;  left: 2.8%; width: 6%;   }
+    #mr-row-bourbon-hotspot    { top: 21.2%; height: 8.2%; left: 2.5%; width: 97.4%; }
+    #mr-row-cigarplace-hotspot { top: 29.4%; height: 7.7%; left: 2.8%; width: 96.4%; }
+    #mr-row-dogwalk-hotspot    { top: 37.3%; height: 7.7%; left: 1.6%; width: 98.3%; }
+    #mr-row-metalman-hotspot   { top: 45.3%; height: 7.3%; left: 0.8%; width: 98.8%; }
+    #mr-detail-back-hotspot    { top: 8.2%;  height: 2.5%; left: 3.3%; width: 5%;  }
+
+    /* ── Preferences flow hotspots ── */
+    #prefs-landing-icon-hotspot,
+    #prefs-manage-profiles-row-hotspot,
+    #prefs-mg-profile-row-hotspot,
+    #prefs-account-row-hotspot,
+    #prefs-back-hotspot,
+    #prefs-select-account-back-hotspot {
+      position: absolute;
+      pointer-events: none;
+      cursor: pointer;
+      z-index: 11;
+      touch-action: manipulation;
+    }
+
+    #prefs-landing-icon-hotspot        { top: 94.9%; height: 2.3%; left: 37.5%; width: 8.7%; }
+    #prefs-manage-profiles-row-hotspot { top: 63.8%; height: 5.6%; left: 1.3%;  width: 98.3%; }
+    #prefs-mg-profile-row-hotspot      { top: 16.8%; height: 7.6%; left: 1.6%;  width: 97.8%; }
+    #prefs-account-row-hotspot         { top: 36.2%; height: 6.2%; left: 0.4%;  width: 99%;   }
+    #prefs-back-hotspot                { top: 8.2%;  height: 2.5%; left: 3.3%;  width: 5%;    }
+    #prefs-select-account-back-hotspot { top: 69.4%; height: 2.8%; left: 6.2%;  width: 6.7%;  }
+
+    /* ── Processing spinner ── */
+    @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+    #spinner {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.25);
+      border-top-color: #fff;
+      animation: spin 0.7s linear infinite;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    /* ── Demo wrapper — panel + phone side-by-side ── */
+    .demo-wrapper {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 32px;
+    }
+
+    /* ── Use-case selection panel ── */
+    .use-case-panel {
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 12px;
+      padding: 20px 24px;
+      color: #fff;
+      min-width: 180px;
+    }
+
+    .use-case-panel fieldset {
+      border: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .use-case-panel legend {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 14px;
+    }
+
+    .use-case-panel label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .use-case-panel label:last-child {
+      border-bottom: none;
+    }
+
+    .use-case-panel input[type="radio"] {
+      accent-color: #6c47ff;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="bg"></div>
+  <div class="demo-wrapper">
+    <aside class="use-case-panel">
+      <fieldset>
+        <legend>Use Cases</legend>
+        <label><input type="radio" name="use-case" value="enroll-p2p"> P2P Enrollment</label>
+        <label><input type="radio" name="use-case" value="enroll-smb"> SMB Enrollment</label>
+        <label><input type="radio" name="use-case" value="send-payment"> Send Payment</label>
+        <label><input type="radio" name="use-case" value="activity"> Activity</label>
+        <label><input type="radio" name="use-case" value="manage-recipients"> Manage Recipients</label>
+        <label><input type="radio" name="use-case" value="preferences"> Preferences</label>
+      </fieldset>
+    </aside>
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <img
+          class="slide"
+          id="slide-current"
+          src=""
+          alt=""
+          style="transform: translateX(0)"
+          onerror="this.src=''; this.style.background='#111';"
+        >
+        <img
+          class="slide"
+          id="slide-incoming"
+          src=""
+          alt=""
+          style="transform: translateX(100%)"
+          onerror="this.src=''; this.style.background='#111';"
+        >
+        <div class="left-zone" id="left-zone"></div>
+        <div class="click-zone" id="click-zone"></div>
+        <div id="cta-hotspot"></div>
+        <div id="accept-hotspot"></div>
+        <div id="choose-radio-hotspot"></div>
+        <div id="choose-continue-hotspot"></div>
+        <div id="select-radio-hotspot"></div>
+        <div id="select-continue-hotspot"></div>
+        <div id="congrats-cta-hotspot"></div>
+        <div id="zrc-access-hotspot"></div>
+        <div id="allow-contacts-01-hotspot"></div>
+        <div id="allow-contacts-02-hotspot"></div>
+        <div id="how-share-hotspot"></div>
+        <div id="select-continue-06-hotspot"></div>
+        <div id="allow-15-hotspot"></div>
+
+        <div id="smb-cta-hotspot"></div>
+        <div id="smb-accept-hotspot"></div>
+        <div id="smb-choose-radio-hotspot"></div>
+        <div id="smb-choose-continue-hotspot"></div>
+        <div id="smb-auth-03-radio-hotspot"></div>
+        <div id="smb-auth-04-continue-hotspot"></div>
+        <div id="smb-auth-otp-01-continue-hotspot"></div>
+        <div id="smb-auth-otp-02-continue-hotspot"></div>
+        <div id="smb-create-tag-01-continue-hotspot"></div>
+        <div id="smb-create-tag-02-continue-hotspot"></div>
+        <div id="smb-create-tag-03-cta-hotspot"></div>
+        <div id="smb-create-tag-04-continue-hotspot"></div>
+        <div id="smb-create-tag-05-finish-hotspot"></div>
+        <div id="smb-select-primary-radio-hotspot"></div>
+        <div id="smb-select-primary-continue-hotspot"></div>
+        <div id="smb-congrats-cta-hotspot"></div>
+        <div id="smb-zelle-tag-intro-cta-hotspot"></div>
+
+        <div id="sp-send-hotspot"></div>
+        <div id="sp-scam-checkbox-hotspot"></div>
+        <div id="sp-scam-gotit-hotspot"></div>
+        <div id="sp-recipient-name-hotspot"></div>
+        <div id="sp-recipient-next-hotspot"></div>
+        <div id="sp-recipient-zelletag-hotspot"></div>
+        <div id="sp-recipient-addcontinue-hotspot"></div>
+        <div id="sp-recipient-yes-hotspot"></div>
+        <div id="sp-amount-area-hotspot"></div>
+        <div id="sp-amount-review-hotspot"></div>
+        <div id="sp-review-send-hotspot"></div>
+        <div id="sp-otp-area-hotspot"></div>
+        <div id="sp-otp-verify-hotspot"></div>
+        <div id="sp-keepsafe-send-hotspot"></div>
+        <div id="sp-alldone-hotspot"></div>
+
+        <div id="act-landing-activity-hotspot"></div>
+        <div id="act-payment-back-hotspot"></div>
+        <div id="act-payment-request-toggle-hotspot"></div>
+        <div id="act-row-bourbon-hotspot"></div>
+        <div id="act-row-kerryking-hotspot"></div>
+        <div id="act-row-cigarplace-hotspot"></div>
+        <div id="act-row-dogwalk-hotspot"></div>
+        <div id="act-row-metalman-hotspot"></div>
+        <div id="act-request-back-hotspot"></div>
+        <div id="act-request-payment-toggle-hotspot"></div>
+        <div id="act-row-dimmuborger-request-hotspot"></div>
+        <div id="act-row-kerryking-request-1-hotspot"></div>
+        <div id="act-row-kerryking-request-2-hotspot"></div>
+        <div id="act-detail-back-hotspot"></div>
+
+        <div id="mr-landing-icon-hotspot"></div>
+        <div id="mr-list-back-hotspot"></div>
+        <div id="mr-row-bourbon-hotspot"></div>
+        <div id="mr-row-cigarplace-hotspot"></div>
+        <div id="mr-row-dogwalk-hotspot"></div>
+        <div id="mr-row-metalman-hotspot"></div>
+        <div id="mr-detail-back-hotspot"></div>
+
+        <div id="prefs-landing-icon-hotspot"></div>
+        <div id="prefs-manage-profiles-row-hotspot"></div>
+        <div id="prefs-mg-profile-row-hotspot"></div>
+        <div id="prefs-account-row-hotspot"></div>
+        <div id="prefs-back-hotspot"></div>
+        <div id="prefs-select-account-back-hotspot"></div>
+      </div>
+      <div class="home-bar"></div>
+    </div>
+  </div>
+
+  <script>
+    const P2P_IMAGES = [
+      'images/Zelle P2P Enrollment Carousel Image 001.png',
+      'images/Zelle P2P Enrollment Carousel Image 002.png',
+      'images/Zelle P2P Enrollment Carousel Image 003.png',
+      'images/Zelle P2P Enrollment Carousel Image 004.png'
+    ];
+    const SMB_IMAGES = [
+      'images/Zelle SMB Enrollment Carousel Image 001.png',
+      'images/Zelle SMB Enrollment Carousel Image 002.png',
+      'images/Zelle SMB Enrollment Carousel Image 003.png',
+      'images/Zelle SMB Enrollment Carousel Image 004.png'
+    ];
+    const TERMS_IMAGE = 'images/Terms and Conditions.png';
+    const CHOOSE_01_IMAGE = 'images/Choose How to Receive Money 01 P2P.png';
+    const CHOOSE_02_IMAGE = 'images/Choose How to Receive Money 02 P2P.png';
+    const SELECT_01_IMAGE = 'images/Select Account 01 P2P.png';
+    const SELECT_02_IMAGE = 'images/Select Account 02 P2P.png';
+    const CONGRATS_IMAGE = 'images/Congratulations P2P.png';
+    const LOCK_IMAGE = 'images/JH50 Lock Screen.png';
+    const ZRC_IMAGE = 'images/ZRC Feature Intro.png';
+    const AC01_IMAGE = 'images/Allow Access To Contacts 01.png';
+    const AC02_IMAGE = 'images/Allow Access To Contacts 02.png';
+    const HOW_SHARE_IMAGE = 'images/How Do You Want to Share.png';
+    const SEL_CONT_IMAGE = 'images/Select And Continue.png';
+    const ALLOW_15_IMAGE = 'images/Allow Access to 15.png';
+    const LANDING_IMAGE = 'images/Landing Page.png';
+
+    const SMB_CHOOSE_01_IMAGE = 'images/Choose How to Receive Money 01 SMB.png';
+    const SMB_CHOOSE_02_IMAGE = 'images/Choose How to Receive Money 02 SMB.png';
+    const SMB_AUTH_03_IMAGE = 'images/Authenticate OTP 03 SMB.png';
+    const SMB_AUTH_04_IMAGE = 'images/Authenticate OTP 04 SMB.png';
+    const SMB_AUTH_OTP_01_IMAGE = 'images/Authenticate OTP 01 SMB.png';
+    const SMB_AUTH_OTP_02_IMAGE = 'images/Authenticate OTP 02 SMB.png';
+    const SMB_CREATE_TAG_01_IMAGE = 'images/Create Zelle Tag 01 SMB.png';
+    const SMB_CREATE_TAG_02_IMAGE = 'images/Create Zelle Tag 02 SMB - Mikes Lawn Care Entered.png';
+    const SMB_CREATE_TAG_03_IMAGE = 'images/Create Zelle Tag 03 SMB - Mikes Lawn Care Not Available.png';
+    const SMB_CREATE_TAG_04_IMAGE = 'images/Create Zelle Tag 04 SMB - Mikes Dog Walking Entered.png';
+    const SMB_CREATE_TAG_05_IMAGE = 'images/Create Zelle Tag 05 SMB - Mikes Dog Walking Available.png';
+    const SMB_SELECT_PRIMARY_01_IMAGE = 'images/Select Primary Account 01 SMB.png';
+    const SMB_SELECT_PRIMARY_02_IMAGE = 'images/Select Primary Account 02 SMB.png';
+    const SMB_CONGRATS_IMAGE = 'images/Congratulations SMB.png';
+    const SMB_TAG_INTRO_IMAGE = 'images/Zelle Tag Feature Introduction SMB.png';
+
+    const SP_LANDING_SEND_IMAGE = 'images/Landing Page for Send.png';
+    const SP_SCAM_01_IMAGE = 'images/Watch Out For Common Scams 01.png';
+    const SP_SCAM_02_IMAGE = 'images/Watch Out For Common Scams 02.png';
+    const SP_RECIPIENT_01_IMAGE = 'images/Select Recipient 01.png';
+    const SP_RECIPIENT_02_IMAGE = 'images/Select Recipient 02.png';
+    const SP_RECIPIENT_03_IMAGE = 'images/Select Recipient 03.png';
+    const SP_RECIPIENT_04_IMAGE = 'images/Select Recipient 04.png';
+    const SP_RECIPIENT_SURE_IMAGE = 'images/Select Recipient Are You Sure.png';
+    const SP_AMOUNT_01_IMAGE = 'images/Enter Amount 01.png';
+    const SP_AMOUNT_02_IMAGE = 'images/Enter Amount 02.png';
+    const SP_REVIEW_SEND_IMAGE = 'images/Review and Send 01.png';
+    const SP_OTP_01_IMAGE = 'images/Review and Send 02 OTP 01.png';
+    const SP_OTP_02_IMAGE = 'images/Review and Send 02 OTP 02.png';
+    const SP_KEEPSAFE_IMAGE = 'images/Keep Your Money Safe.png';
+    const SP_PAYMENT_SENT_IMAGE = 'images/Payment Sent.png';
+    const SP_LANDING_ACTIVITY_IMAGE = 'images/Landing Page for Activity.png';
+
+    const ACT_LIST_VIEW_PAYMENT_IMAGE = 'images/Activity List View Payment.png';
+    const ACT_LIST_VIEW_REQUEST_IMAGE = 'images/Activity List View Request.png';
+    const ACT_DETAIL_BOURBON_IMAGE = 'images/Activity Request to Bourbon Guy Detail.png';
+    const ACT_DETAIL_KERRYKING_IMAGE = 'images/Activity Payment From Kerry King Detail.png';
+    const ACT_DETAIL_CIGARPLACE_IMAGE = 'images/Activity Payment To cigarz-r-us Delivered Detail.png';
+    const ACT_DETAIL_DOGWALK_IMAGE = 'images/Activity Payment To mikes-dog-walking Delivered Detail.png';
+    const ACT_DETAIL_METALMAN_IMAGE = 'images/Activity Payment To Dimmu Borger Delivered Detail.png';
+    const ACT_DETAIL_DIMMUBORGER_REQUEST_IMAGE = 'images/Activity Request From Dimmu Borger Detail.png';
+    const ACT_DETAIL_KERRYKING_DENIED_IMAGE = 'images/Activity Request from Kerry King Denied.png';
+
+    const MR_LANDING_IMAGE = 'images/Landing Page for Manage Recipients.png';
+    const MR_LIST_IMAGE = 'images/Manage Recipients Page.png';
+    const MR_DETAIL_BOURBON_IMAGE = 'images/Recipient Bourbon Guy Details.png';
+    const MR_DETAIL_CIGARPLACE_IMAGE = 'images/Recipient Cigar Place Detail.png';
+    const MR_DETAIL_DOGWALK_IMAGE = 'images/Recipient Dog Walk Guy Detail.png';
+    const MR_DETAIL_METALMAN_IMAGE = 'images/Recipient Metal Man Detail.png';
+
+    const PREFS_LANDING_IMAGE = 'images/Landing Page for Preferences.png';
+    const PREFS_IMAGE = 'images/Preferences.png';
+    const PREFS_MANAGE_PROFILES_IMAGE = 'images/Preferences Manage Payment Profiles.png';
+    const PREFS_PROFILE_DETAILS_IMAGE = 'images/Preferences Payment Profile Details.png';
+    const PREFS_SELECT_ACCOUNT_IMAGE = 'images/Preferences Select An Account Page.png';
+
+    // Preload all images so transitions fire instantly on first use
+    [
+      ...P2P_IMAGES,
+      ...SMB_IMAGES,
+      TERMS_IMAGE,
+      CHOOSE_01_IMAGE,
+      CHOOSE_02_IMAGE,
+      SELECT_01_IMAGE,
+      SELECT_02_IMAGE,
+      CONGRATS_IMAGE,
+      LOCK_IMAGE,
+      ZRC_IMAGE,
+      AC01_IMAGE,
+      AC02_IMAGE,
+      HOW_SHARE_IMAGE,
+      SEL_CONT_IMAGE,
+      ALLOW_15_IMAGE,
+      LANDING_IMAGE,
+      SMB_CHOOSE_01_IMAGE,
+      SMB_CHOOSE_02_IMAGE,
+      SMB_AUTH_03_IMAGE,
+      SMB_AUTH_04_IMAGE,
+      SMB_AUTH_OTP_01_IMAGE,
+      SMB_AUTH_OTP_02_IMAGE,
+      SMB_CREATE_TAG_01_IMAGE,
+      SMB_CREATE_TAG_02_IMAGE,
+      SMB_CREATE_TAG_03_IMAGE,
+      SMB_CREATE_TAG_04_IMAGE,
+      SMB_CREATE_TAG_05_IMAGE,
+      SMB_SELECT_PRIMARY_01_IMAGE,
+      SMB_SELECT_PRIMARY_02_IMAGE,
+      SMB_CONGRATS_IMAGE,
+      SMB_TAG_INTRO_IMAGE,
+      SP_LANDING_SEND_IMAGE,
+      SP_SCAM_01_IMAGE,
+      SP_SCAM_02_IMAGE,
+      SP_RECIPIENT_01_IMAGE,
+      SP_RECIPIENT_02_IMAGE,
+      SP_RECIPIENT_03_IMAGE,
+      SP_RECIPIENT_04_IMAGE,
+      SP_RECIPIENT_SURE_IMAGE,
+      SP_AMOUNT_01_IMAGE,
+      SP_AMOUNT_02_IMAGE,
+      SP_REVIEW_SEND_IMAGE,
+      SP_OTP_01_IMAGE,
+      SP_OTP_02_IMAGE,
+      SP_KEEPSAFE_IMAGE,
+      SP_PAYMENT_SENT_IMAGE,
+      SP_LANDING_ACTIVITY_IMAGE,
+      ACT_LIST_VIEW_PAYMENT_IMAGE,
+      ACT_LIST_VIEW_REQUEST_IMAGE,
+      ACT_DETAIL_BOURBON_IMAGE,
+      ACT_DETAIL_KERRYKING_IMAGE,
+      ACT_DETAIL_CIGARPLACE_IMAGE,
+      ACT_DETAIL_DOGWALK_IMAGE,
+      ACT_DETAIL_METALMAN_IMAGE,
+      ACT_DETAIL_DIMMUBORGER_REQUEST_IMAGE,
+      ACT_DETAIL_KERRYKING_DENIED_IMAGE,
+      MR_LANDING_IMAGE,
+      MR_LIST_IMAGE,
+      MR_DETAIL_BOURBON_IMAGE,
+      MR_DETAIL_CIGARPLACE_IMAGE,
+      MR_DETAIL_DOGWALK_IMAGE,
+      MR_DETAIL_METALMAN_IMAGE,
+      PREFS_LANDING_IMAGE,
+      PREFS_IMAGE,
+      PREFS_MANAGE_PROFILES_IMAGE,
+      PREFS_PROFILE_DETAILS_IMAGE,
+      PREFS_SELECT_ACCOUNT_IMAGE
+    ].forEach((src) => {
+      const image = new Image();
+      image.src = src;
+    });
+
+    // ── Runtime state model ──
+    let activeUseCase = 'none';
+    let flowState = 'lock-screen';
+    let currentCarouselIndex = 0;
+    let isAnimating = false;
+    let spinnerTimerId = null;
+    let smbIntroRotateTimerId = null;
+    let actReturnListState = 'act-list-view-payment';
+
+    const current               = document.getElementById('slide-current');
+    const incoming              = document.getElementById('slide-incoming');
+    const clickZone             = document.getElementById('click-zone');
+    const leftZone              = document.getElementById('left-zone');
+    const ctaHotspot            = document.getElementById('cta-hotspot');
+    const acceptHotspot         = document.getElementById('accept-hotspot');
+    const chooseRadioHotspot    = document.getElementById('choose-radio-hotspot');
+    const chooseContinueHotspot = document.getElementById('choose-continue-hotspot');
+    const selectRadioHotspot    = document.getElementById('select-radio-hotspot');
+    const selectContinueHotspot = document.getElementById('select-continue-hotspot');
+    const congratsCTAHotspot        = document.getElementById('congrats-cta-hotspot');
+    const zrcAccessHotspot          = document.getElementById('zrc-access-hotspot');
+    const allowContacts01Hotspot    = document.getElementById('allow-contacts-01-hotspot');
+    const allowContacts02Hotspot    = document.getElementById('allow-contacts-02-hotspot');
+    const howShareHotspot           = document.getElementById('how-share-hotspot');
+    const selectContinue06Hotspot   = document.getElementById('select-continue-06-hotspot');
+    const allow15Hotspot            = document.getElementById('allow-15-hotspot');
+
+    const smbCtaHotspot                   = document.getElementById('smb-cta-hotspot');
+    const smbAcceptHotspot                = document.getElementById('smb-accept-hotspot');
+    const smbChooseRadioHotspot           = document.getElementById('smb-choose-radio-hotspot');
+    const smbChooseContinueHotspot        = document.getElementById('smb-choose-continue-hotspot');
+    const smbAuth03RadioHotspot           = document.getElementById('smb-auth-03-radio-hotspot');
+    const smbAuth04ContinueHotspot        = document.getElementById('smb-auth-04-continue-hotspot');
+    const smbAuthOtp01ContinueHotspot     = document.getElementById('smb-auth-otp-01-continue-hotspot');
+    const smbAuthOtp02ContinueHotspot     = document.getElementById('smb-auth-otp-02-continue-hotspot');
+    const smbCreateTag01ContinueHotspot   = document.getElementById('smb-create-tag-01-continue-hotspot');
+    const smbCreateTag02ContinueHotspot   = document.getElementById('smb-create-tag-02-continue-hotspot');
+    const smbCreateTag03CTAHotspot        = document.getElementById('smb-create-tag-03-cta-hotspot');
+    const smbCreateTag04ContinueHotspot   = document.getElementById('smb-create-tag-04-continue-hotspot');
+    const smbCreateTag05FinishHotspot     = document.getElementById('smb-create-tag-05-finish-hotspot');
+    const smbSelectPrimaryRadioHotspot    = document.getElementById('smb-select-primary-radio-hotspot');
+    const smbSelectPrimaryContinueHotspot = document.getElementById('smb-select-primary-continue-hotspot');
+    const smbCongratsCTAHotspot           = document.getElementById('smb-congrats-cta-hotspot');
+    const smbZelleTagIntroCTAHotspot      = document.getElementById('smb-zelle-tag-intro-cta-hotspot');
+
+    const spSendHotspot                   = document.getElementById('sp-send-hotspot');
+    const spScamCheckboxHotspot           = document.getElementById('sp-scam-checkbox-hotspot');
+    const spScamGotItHotspot              = document.getElementById('sp-scam-gotit-hotspot');
+    const spRecipientNameHotspot          = document.getElementById('sp-recipient-name-hotspot');
+    const spRecipientNextHotspot          = document.getElementById('sp-recipient-next-hotspot');
+    const spRecipientZelleTagHotspot      = document.getElementById('sp-recipient-zelletag-hotspot');
+    const spRecipientAddContinueHotspot   = document.getElementById('sp-recipient-addcontinue-hotspot');
+    const spRecipientYesHotspot           = document.getElementById('sp-recipient-yes-hotspot');
+    const spAmountAreaHotspot             = document.getElementById('sp-amount-area-hotspot');
+    const spAmountReviewHotspot           = document.getElementById('sp-amount-review-hotspot');
+    const spReviewSendHotspot             = document.getElementById('sp-review-send-hotspot');
+    const spOtpAreaHotspot                = document.getElementById('sp-otp-area-hotspot');
+    const spOtpVerifyHotspot              = document.getElementById('sp-otp-verify-hotspot');
+    const spKeepsafeSendHotspot           = document.getElementById('sp-keepsafe-send-hotspot');
+    const spAllDoneHotspot                = document.getElementById('sp-alldone-hotspot');
+
+    const actLandingActivityHotspot       = document.getElementById('act-landing-activity-hotspot');
+    const actPaymentBackHotspot           = document.getElementById('act-payment-back-hotspot');
+    const actPaymentRequestToggleHotspot  = document.getElementById('act-payment-request-toggle-hotspot');
+    const actRowBourbonHotspot            = document.getElementById('act-row-bourbon-hotspot');
+    const actRowKerryKingHotspot          = document.getElementById('act-row-kerryking-hotspot');
+    const actRowCigarPlaceHotspot         = document.getElementById('act-row-cigarplace-hotspot');
+    const actRowDogWalkHotspot            = document.getElementById('act-row-dogwalk-hotspot');
+    const actRowMetalManHotspot           = document.getElementById('act-row-metalman-hotspot');
+    const actRequestBackHotspot           = document.getElementById('act-request-back-hotspot');
+    const actRequestPaymentToggleHotspot  = document.getElementById('act-request-payment-toggle-hotspot');
+    const actRowDimmuBorgerRequestHotspot = document.getElementById('act-row-dimmuborger-request-hotspot');
+    const actRowKerryKingRequest1Hotspot  = document.getElementById('act-row-kerryking-request-1-hotspot');
+    const actRowKerryKingRequest2Hotspot  = document.getElementById('act-row-kerryking-request-2-hotspot');
+    const actDetailBackHotspot            = document.getElementById('act-detail-back-hotspot');
+
+    const mrLandingIconHotspot   = document.getElementById('mr-landing-icon-hotspot');
+    const mrListBackHotspot      = document.getElementById('mr-list-back-hotspot');
+    const mrRowBourbonHotspot    = document.getElementById('mr-row-bourbon-hotspot');
+    const mrRowCigarPlaceHotspot = document.getElementById('mr-row-cigarplace-hotspot');
+    const mrRowDogWalkHotspot    = document.getElementById('mr-row-dogwalk-hotspot');
+    const mrRowMetalManHotspot   = document.getElementById('mr-row-metalman-hotspot');
+    const mrDetailBackHotspot    = document.getElementById('mr-detail-back-hotspot');
+
+    const prefsLandingIconHotspot        = document.getElementById('prefs-landing-icon-hotspot');
+    const prefsManageProfilesRowHotspot  = document.getElementById('prefs-manage-profiles-row-hotspot');
+    const prefsMgProfileRowHotspot       = document.getElementById('prefs-mg-profile-row-hotspot');
+    const prefsAccountRowHotspot         = document.getElementById('prefs-account-row-hotspot');
+    const prefsBackHotspot               = document.getElementById('prefs-back-hotspot');
+    const prefsSelectAccountBackHotspot  = document.getElementById('prefs-select-account-back-hotspot');
+
+    function clearSmbIntroRotation() {
+      clearTimeout(smbIntroRotateTimerId);
+      smbIntroRotateTimerId = null;
+    }
+
+    function getActiveCarouselImages() {
+      return activeUseCase === 'enroll-smb' ? SMB_IMAGES : P2P_IMAGES;
+    }
+
+    function disableAllPhoneHotspots() {
+      ctaHotspot.style.pointerEvents = 'none';
+      acceptHotspot.style.pointerEvents = 'none';
+      chooseRadioHotspot.style.pointerEvents = 'none';
+      chooseContinueHotspot.style.pointerEvents = 'none';
+      selectRadioHotspot.style.pointerEvents = 'none';
+      selectContinueHotspot.style.pointerEvents = 'none';
+      congratsCTAHotspot.style.pointerEvents = 'none';
+      zrcAccessHotspot.style.pointerEvents = 'none';
+      allowContacts01Hotspot.style.pointerEvents = 'none';
+      allowContacts02Hotspot.style.pointerEvents = 'none';
+      howShareHotspot.style.pointerEvents = 'none';
+      selectContinue06Hotspot.style.pointerEvents = 'none';
+      allow15Hotspot.style.pointerEvents = 'none';
+
+      smbCtaHotspot.style.pointerEvents = 'none';
+      smbAcceptHotspot.style.pointerEvents = 'none';
+      smbChooseRadioHotspot.style.pointerEvents = 'none';
+      smbChooseContinueHotspot.style.pointerEvents = 'none';
+      smbAuth03RadioHotspot.style.pointerEvents = 'none';
+      smbAuth04ContinueHotspot.style.pointerEvents = 'none';
+      smbAuthOtp01ContinueHotspot.style.pointerEvents = 'none';
+      smbAuthOtp02ContinueHotspot.style.pointerEvents = 'none';
+      smbCreateTag01ContinueHotspot.style.pointerEvents = 'none';
+      smbCreateTag02ContinueHotspot.style.pointerEvents = 'none';
+      smbCreateTag03CTAHotspot.style.pointerEvents = 'none';
+      smbCreateTag04ContinueHotspot.style.pointerEvents = 'none';
+      smbCreateTag05FinishHotspot.style.pointerEvents = 'none';
+      smbSelectPrimaryRadioHotspot.style.pointerEvents = 'none';
+      smbSelectPrimaryContinueHotspot.style.pointerEvents = 'none';
+      smbCongratsCTAHotspot.style.pointerEvents = 'none';
+      smbZelleTagIntroCTAHotspot.style.pointerEvents = 'none';
+
+      spSendHotspot.style.pointerEvents = 'none';
+      spScamCheckboxHotspot.style.pointerEvents = 'none';
+      spScamGotItHotspot.style.pointerEvents = 'none';
+      spRecipientNameHotspot.style.pointerEvents = 'none';
+      spRecipientNextHotspot.style.pointerEvents = 'none';
+      spRecipientZelleTagHotspot.style.pointerEvents = 'none';
+      spRecipientAddContinueHotspot.style.pointerEvents = 'none';
+      spRecipientYesHotspot.style.pointerEvents = 'none';
+      spAmountAreaHotspot.style.pointerEvents = 'none';
+      spAmountReviewHotspot.style.pointerEvents = 'none';
+      spReviewSendHotspot.style.pointerEvents = 'none';
+      spOtpAreaHotspot.style.pointerEvents = 'none';
+      spOtpVerifyHotspot.style.pointerEvents = 'none';
+      spKeepsafeSendHotspot.style.pointerEvents = 'none';
+      spAllDoneHotspot.style.pointerEvents = 'none';
+
+      actLandingActivityHotspot.style.pointerEvents = 'none';
+      actPaymentBackHotspot.style.pointerEvents = 'none';
+      actPaymentRequestToggleHotspot.style.pointerEvents = 'none';
+      actRowBourbonHotspot.style.pointerEvents = 'none';
+      actRowKerryKingHotspot.style.pointerEvents = 'none';
+      actRowCigarPlaceHotspot.style.pointerEvents = 'none';
+      actRowDogWalkHotspot.style.pointerEvents = 'none';
+      actRowMetalManHotspot.style.pointerEvents = 'none';
+      actRequestBackHotspot.style.pointerEvents = 'none';
+      actRequestPaymentToggleHotspot.style.pointerEvents = 'none';
+      actRowDimmuBorgerRequestHotspot.style.pointerEvents = 'none';
+      actRowKerryKingRequest1Hotspot.style.pointerEvents = 'none';
+      actRowKerryKingRequest2Hotspot.style.pointerEvents = 'none';
+      actDetailBackHotspot.style.pointerEvents = 'none';
+
+      mrLandingIconHotspot.style.pointerEvents = 'none';
+      mrListBackHotspot.style.pointerEvents = 'none';
+      mrRowBourbonHotspot.style.pointerEvents = 'none';
+      mrRowCigarPlaceHotspot.style.pointerEvents = 'none';
+      mrRowDogWalkHotspot.style.pointerEvents = 'none';
+      mrRowMetalManHotspot.style.pointerEvents = 'none';
+      mrDetailBackHotspot.style.pointerEvents = 'none';
+
+      prefsLandingIconHotspot.style.pointerEvents = 'none';
+      prefsManageProfilesRowHotspot.style.pointerEvents = 'none';
+      prefsMgProfileRowHotspot.style.pointerEvents = 'none';
+      prefsAccountRowHotspot.style.pointerEvents = 'none';
+      prefsBackHotspot.style.pointerEvents = 'none';
+      prefsSelectAccountBackHotspot.style.pointerEvents = 'none';
+    }
+
+    function disableCarouselZones() {
+      clickZone.style.pointerEvents = 'none';
+      clickZone.style.cursor = 'default';
+      leftZone.style.pointerEvents = 'none';
+      leftZone.style.cursor = 'default';
+    }
+
+    function enableCarouselZones() {
+      clickZone.style.pointerEvents = 'auto';
+      clickZone.style.cursor = 'pointer';
+      leftZone.style.pointerEvents = 'auto';
+      leftZone.style.cursor = 'pointer';
+    }
+
+    function setScreenInstant(src, nextState) {
+      incoming.style.transition = 'none';
+      incoming.src = '';
+      incoming.style.transform = 'translateX(100%)';
+      current.style.transition = 'none';
+      current.style.opacity = '1';
+      current.src = src;
+      current.style.transform = 'translateX(0)';
+      flowState = nextState;
+    }
+
+    function resetToLockScreen() {
+      clearTimeout(spinnerTimerId);
+      spinnerTimerId = null;
+      clearSmbIntroRotation();
+      document.getElementById('spinner')?.remove();
+
+      isAnimating = false;
+      currentCarouselIndex = 0;
+      flowState = 'lock-screen';
+
+      disableCarouselZones();
+      disableAllPhoneHotspots();
+      setScreenInstant(LOCK_IMAGE, 'lock-screen');
+    }
+
+    function activateEnrollP2P() {
+      activeUseCase = 'enroll-p2p';
+      isAnimating = false;
+      currentCarouselIndex = 0;
+      setScreenInstant(P2P_IMAGES[0], 'carousel');
+      enableCarouselZones();
+      ctaHotspot.style.pointerEvents = 'all';
+    }
+
+    function activateEnrollSMB() {
+      activeUseCase = 'enroll-smb';
+      isAnimating = false;
+      currentCarouselIndex = 0;
+      setScreenInstant(SMB_IMAGES[0], 'carousel');
+      enableCarouselZones();
+      smbCtaHotspot.style.pointerEvents = 'all';
+    }
+
+    function advance() {
+      if (isAnimating || flowState !== 'carousel') return;
+      isAnimating = true;
+
+      const activeImages = getActiveCarouselImages();
+      const nextIndex = (currentCarouselIndex + 1) % activeImages.length;
+
+      // Stage incoming image off-screen right with no transition
+      incoming.style.transition = 'none';
+      incoming.src = activeImages[nextIndex];
+      incoming.style.transform = 'translateX(100%)';
+
+      // Double rAF ensures the browser registers the reset before animating
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          current.style.transition  = 'transform 300ms ease-in-out';
+          incoming.style.transition = 'transform 300ms ease-in-out';
+          current.style.transform   = 'translateX(-100%)';
+          incoming.style.transform  = 'translateX(0)';
+
+          setTimeout(() => {
+            current.style.transition  = 'none';
+            current.src               = activeImages[nextIndex];
+            current.style.transform   = 'translateX(0)';
+            incoming.style.transition = 'none';
+            incoming.style.transform  = 'translateX(100%)';
+            currentCarouselIndex = nextIndex;
+            isAnimating  = false;
+            if (activeUseCase === 'enroll-smb') {
+              smbCtaHotspot.style.pointerEvents = 'all';
+            } else {
+              ctaHotspot.style.pointerEvents = 'all';
+            }
+          }, 300);
+        });
+      });
+    }
+
+    function retreat() {
+      if (isAnimating || flowState !== 'carousel') return;
+      isAnimating = true;
+
+      const activeImages = getActiveCarouselImages();
+      const prevIndex = (currentCarouselIndex - 1 + activeImages.length) % activeImages.length;
+
+      // Stage incoming image off-screen left with no transition
+      incoming.style.transition = 'none';
+      incoming.src              = activeImages[prevIndex];
+      incoming.style.transform  = 'translateX(-100%)';
+
+      // Double rAF ensures the browser registers the reset before animating
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          current.style.transition  = 'transform 300ms ease-in-out';
+          incoming.style.transition = 'transform 300ms ease-in-out';
+          current.style.transform   = 'translateX(100%)';
+          incoming.style.transform  = 'translateX(0)';
+
+          setTimeout(() => {
+            current.style.transition  = 'none';
+            current.src               = activeImages[prevIndex];
+            current.style.transform   = 'translateX(0)';
+            incoming.style.transition = 'none';
+            incoming.style.transform  = 'translateX(-100%)';
+            currentCarouselIndex = prevIndex;
+            isAnimating  = false;
+            if (activeUseCase === 'enroll-smb') {
+              smbCtaHotspot.style.pointerEvents = 'all';
+            } else {
+              ctaHotspot.style.pointerEvents = 'all';
+            }
+          }, 300);
+        });
+      });
+    }
+
+    function showTerms() {
+      if (isAnimating || flowState !== 'carousel') return;
+      disableCarouselZones();
+      disableAllPhoneHotspots();
+      setScreenInstant(TERMS_IMAGE, activeUseCase === 'enroll-smb' ? 'terms-smb' : 'terms-p2p');
+      if (activeUseCase === 'enroll-smb') {
+        smbAcceptHotspot.style.pointerEvents = 'all';
+      } else {
+        acceptHotspot.style.pointerEvents = 'all';
+      }
+    }
+
+    function showChooseScreen() {
+      if (isAnimating || flowState !== 'terms-p2p') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(CHOOSE_01_IMAGE, 'choose-receive-01');
+      chooseRadioHotspot.style.pointerEvents = 'all';
+    }
+
+    function showSmbChooseScreen() {
+      if (isAnimating || flowState !== 'terms-smb') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_CHOOSE_01_IMAGE, 'smb-choose-receive-01');
+      smbChooseRadioHotspot.style.pointerEvents = 'all';
+    }
+
+    function swapToChooseReceive02() {
+      if (isAnimating || flowState !== 'choose-receive-01') return;
+      disableAllPhoneHotspots();
+      current.style.transition = 'none';
+      current.src = CHOOSE_02_IMAGE;
+      flowState = 'choose-receive-02';
+      chooseContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function p2pToAuthOtp01() {
+      if (isAnimating || flowState !== 'choose-receive-02') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_AUTH_OTP_01_IMAGE, 'p2p-auth-otp-01');
+      smbAuthOtp01ContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function p2pToAuthOtp02() {
+      if (isAnimating || flowState !== 'p2p-auth-otp-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_AUTH_OTP_02_IMAGE, 'p2p-auth-otp-02');
+      smbAuthOtp02ContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function p2pProcessToSelectAccount01() {
+      if (isAnimating || flowState !== 'p2p-auth-otp-02') return;
+      isAnimating = true;
+      flowState = 'p2p-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SELECT_01_IMAGE;
+        flowState = 'select-account-01';
+        isAnimating = false;
+        selectRadioHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function swapToSelectAccount02() {
+      if (isAnimating || flowState !== 'select-account-01') return;
+      disableAllPhoneHotspots();
+      current.style.transition = 'none';
+      current.src = SELECT_02_IMAGE;
+      flowState = 'select-account-02';
+      selectContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function showProcessing() {
+      if (isAnimating || flowState !== 'select-account-02') return;
+      isAnimating = true;
+      flowState = 'processing';
+      disableAllPhoneHotspots();
+      disableCarouselZones();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity    = '1';
+        current.src = CONGRATS_IMAGE;
+        flowState = 'congratulations';
+        isAnimating = false;
+        congratsCTAHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function toZrcIntro() {
+      if (isAnimating || flowState !== 'congratulations') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(ZRC_IMAGE, 'zrc-intro');
+      zrcAccessHotspot.style.pointerEvents = 'all';
+    }
+
+    function toAllowContacts01() {
+      if (isAnimating || flowState !== 'zrc-intro') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(AC01_IMAGE, 'allow-contacts-01');
+      allowContacts01Hotspot.style.pointerEvents = 'all';
+    }
+
+    function toAllowContacts02() {
+      if (isAnimating || flowState !== 'allow-contacts-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(AC02_IMAGE, 'allow-contacts-02');
+      allowContacts02Hotspot.style.pointerEvents = 'all';
+    }
+
+    function toHowShare() {
+      if (isAnimating || flowState !== 'allow-contacts-02') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(HOW_SHARE_IMAGE, 'how-share');
+      howShareHotspot.style.pointerEvents = 'all';
+    }
+
+    function toSelectContinue() {
+      if (isAnimating || flowState !== 'how-share') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SEL_CONT_IMAGE, 'select-continue');
+      selectContinue06Hotspot.style.pointerEvents = 'all';
+    }
+
+    function toAllow15() {
+      if (isAnimating || flowState !== 'select-continue') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(ALLOW_15_IMAGE, 'allow-15');
+      allow15Hotspot.style.pointerEvents = 'all';
+    }
+
+    function toLandingPage() {
+      if (isAnimating || flowState !== 'allow-15') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(LANDING_IMAGE, 'landing-page');
+    }
+
+    function smbSwapToChooseReceive02() {
+      if (isAnimating || flowState !== 'smb-choose-receive-01') return;
+      disableAllPhoneHotspots();
+      current.style.transition = 'none';
+      current.src = SMB_CHOOSE_02_IMAGE;
+      flowState = 'smb-choose-receive-02';
+      smbChooseContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbToAuth03() {
+      if (isAnimating || flowState !== 'smb-choose-receive-02') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_AUTH_03_IMAGE, 'smb-auth-03');
+      smbAuth03RadioHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbSwapToAuth04() {
+      if (isAnimating || flowState !== 'smb-auth-03') return;
+      disableAllPhoneHotspots();
+      current.style.transition = 'none';
+      current.src = SMB_AUTH_04_IMAGE;
+      flowState = 'smb-auth-04';
+      smbAuth04ContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbToAuthOtp01() {
+      if (isAnimating || flowState !== 'smb-auth-04') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_AUTH_OTP_01_IMAGE, 'smb-auth-otp-01');
+      smbAuthOtp01ContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbToAuthOtp02() {
+      if (isAnimating || flowState !== 'smb-auth-otp-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_AUTH_OTP_02_IMAGE, 'smb-auth-otp-02');
+      smbAuthOtp02ContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbProcessToCreateTag01() {
+      if (isAnimating || flowState !== 'smb-auth-otp-02') return;
+      isAnimating = true;
+      flowState = 'smb-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SMB_CREATE_TAG_01_IMAGE;
+        flowState = 'smb-create-tag-01';
+        isAnimating = false;
+        smbCreateTag01ContinueHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function smbToCreateTag02() {
+      if (isAnimating || flowState !== 'smb-create-tag-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_CREATE_TAG_02_IMAGE, 'smb-create-tag-02');
+      smbCreateTag02ContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbToCreateTag03() {
+      if (isAnimating || flowState !== 'smb-create-tag-02') return;
+      isAnimating = true;
+      flowState = 'smb-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SMB_CREATE_TAG_03_IMAGE;
+        flowState = 'smb-create-tag-03';
+        isAnimating = false;
+        smbCreateTag03CTAHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function smbToCreateTag04() {
+      if (isAnimating || flowState !== 'smb-create-tag-03') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_CREATE_TAG_04_IMAGE, 'smb-create-tag-04');
+      smbCreateTag04ContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbToCreateTag05() {
+      if (isAnimating || flowState !== 'smb-create-tag-04') return;
+      isAnimating = true;
+      flowState = 'smb-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SMB_CREATE_TAG_05_IMAGE;
+        flowState = 'smb-create-tag-05';
+        isAnimating = false;
+        smbCreateTag05FinishHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function smbToSelectPrimary01() {
+      if (isAnimating || flowState !== 'smb-create-tag-05') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_SELECT_PRIMARY_01_IMAGE, 'smb-select-primary-01');
+      smbSelectPrimaryRadioHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbToSelectPrimary02() {
+      if (isAnimating || flowState !== 'smb-select-primary-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SMB_SELECT_PRIMARY_02_IMAGE, 'smb-select-primary-02');
+      smbSelectPrimaryContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function smbToCongrats() {
+      if (isAnimating || flowState !== 'smb-select-primary-02') return;
+      isAnimating = true;
+      flowState = 'smb-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SMB_CONGRATS_IMAGE;
+        flowState = 'smb-congratulations';
+        isAnimating = false;
+        smbCongratsCTAHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function smbScheduleIntroRotation() {
+      clearSmbIntroRotation();
+      if (flowState !== 'smb-zrc-intro' && flowState !== 'smb-zelle-tag-intro') return;
+
+      smbIntroRotateTimerId = setTimeout(() => {
+        if (flowState === 'smb-zrc-intro') {
+          disableAllPhoneHotspots();
+          setScreenInstant(SMB_TAG_INTRO_IMAGE, 'smb-zelle-tag-intro');
+          smbZelleTagIntroCTAHotspot.style.pointerEvents = 'all';
+        } else if (flowState === 'smb-zelle-tag-intro') {
+          disableAllPhoneHotspots();
+          setScreenInstant(ZRC_IMAGE, 'smb-zrc-intro');
+          zrcAccessHotspot.style.pointerEvents = 'all';
+        }
+        smbScheduleIntroRotation();
+      }, 5000);
+    }
+
+    function smbToZrcIntro() {
+      if (isAnimating || flowState !== 'smb-congratulations') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(ZRC_IMAGE, 'smb-zrc-intro');
+      zrcAccessHotspot.style.pointerEvents = 'all';
+      smbScheduleIntroRotation();
+    }
+
+    function smbToContactsFlow() {
+      if (isAnimating || (flowState !== 'smb-zrc-intro' && flowState !== 'smb-zelle-tag-intro')) return;
+      clearSmbIntroRotation();
+      disableAllPhoneHotspots();
+      setScreenInstant(AC01_IMAGE, 'allow-contacts-01');
+      allowContacts01Hotspot.style.pointerEvents = 'all';
+    }
+
+    function fromZrcIntro() {
+      if (flowState === 'zrc-intro') {
+        toAllowContacts01();
+      } else if (flowState === 'smb-zrc-intro') {
+        smbToContactsFlow();
+      }
+    }
+
+    function activateSendPayment() {
+      activeUseCase = 'send-payment';
+      isAnimating = false;
+      disableCarouselZones();
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_LANDING_SEND_IMAGE, 'sp-landing-send');
+      spSendHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToScam01() {
+      if (isAnimating || flowState !== 'sp-landing-send') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_SCAM_01_IMAGE, 'sp-scam-01');
+      spScamCheckboxHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToScam02() {
+      if (isAnimating || flowState !== 'sp-scam-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_SCAM_02_IMAGE, 'sp-scam-02');
+      spScamGotItHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToRecipient01() {
+      if (isAnimating || flowState !== 'sp-scam-02') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_RECIPIENT_01_IMAGE, 'sp-recipient-01');
+      spRecipientNameHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToRecipient02() {
+      if (isAnimating || flowState !== 'sp-recipient-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_RECIPIENT_02_IMAGE, 'sp-recipient-02');
+      spRecipientNextHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToRecipient03() {
+      if (isAnimating || flowState !== 'sp-recipient-02') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_RECIPIENT_03_IMAGE, 'sp-recipient-03');
+      spRecipientZelleTagHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToRecipient04() {
+      if (isAnimating || flowState !== 'sp-recipient-03') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_RECIPIENT_04_IMAGE, 'sp-recipient-04');
+      spRecipientAddContinueHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToRecipientSure() {
+      if (isAnimating || flowState !== 'sp-recipient-04') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_RECIPIENT_SURE_IMAGE, 'sp-recipient-sure');
+      spRecipientYesHotspot.style.pointerEvents = 'all';
+    }
+
+    function spProcessToAmount01() {
+      if (isAnimating || flowState !== 'sp-recipient-sure') return;
+      isAnimating = true;
+      flowState = 'sp-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SP_AMOUNT_01_IMAGE;
+        flowState = 'sp-amount-01';
+        isAnimating = false;
+        spAmountAreaHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function spToAmount02() {
+      if (isAnimating || flowState !== 'sp-amount-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_AMOUNT_02_IMAGE, 'sp-amount-02');
+      spAmountReviewHotspot.style.pointerEvents = 'all';
+    }
+
+    function spProcessToReviewSend() {
+      if (isAnimating || flowState !== 'sp-amount-02') return;
+      isAnimating = true;
+      flowState = 'sp-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SP_REVIEW_SEND_IMAGE;
+        flowState = 'sp-review-send';
+        isAnimating = false;
+        spReviewSendHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function spToOtp01() {
+      if (isAnimating || flowState !== 'sp-review-send') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_OTP_01_IMAGE, 'sp-otp-01');
+      spOtpAreaHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToOtp02() {
+      if (isAnimating || flowState !== 'sp-otp-01') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_OTP_02_IMAGE, 'sp-otp-02');
+      spOtpVerifyHotspot.style.pointerEvents = 'all';
+    }
+
+    function spToKeepSafe() {
+      if (isAnimating || flowState !== 'sp-otp-02') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_KEEPSAFE_IMAGE, 'sp-keepsafe');
+      spKeepsafeSendHotspot.style.pointerEvents = 'all';
+    }
+
+    function spProcessToPaymentSent() {
+      if (isAnimating || flowState !== 'sp-keepsafe') return;
+      isAnimating = true;
+      flowState = 'sp-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = SP_PAYMENT_SENT_IMAGE;
+        flowState = 'sp-payment-sent';
+        isAnimating = false;
+        spAllDoneHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function spToLandingPageEnd() {
+      if (isAnimating || flowState !== 'sp-payment-sent') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(LANDING_IMAGE, 'landing-page');
+    }
+
+    function activateActivity() {
+      activeUseCase = 'activity';
+      isAnimating = false;
+      disableCarouselZones();
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_LANDING_ACTIVITY_IMAGE, 'act-landing');
+      actLandingActivityHotspot.style.pointerEvents = 'all';
+    }
+
+    function showActPaymentList() {
+      disableAllPhoneHotspots();
+      setScreenInstant(ACT_LIST_VIEW_PAYMENT_IMAGE, 'act-list-view-payment');
+      actPaymentBackHotspot.style.pointerEvents = 'all';
+      actPaymentRequestToggleHotspot.style.pointerEvents = 'all';
+      actRowBourbonHotspot.style.pointerEvents = 'all';
+      actRowKerryKingHotspot.style.pointerEvents = 'all';
+      actRowCigarPlaceHotspot.style.pointerEvents = 'all';
+      actRowDogWalkHotspot.style.pointerEvents = 'all';
+      actRowMetalManHotspot.style.pointerEvents = 'all';
+    }
+
+    function showActRequestList() {
+      disableAllPhoneHotspots();
+      setScreenInstant(ACT_LIST_VIEW_REQUEST_IMAGE, 'act-list-view-request');
+      actRequestBackHotspot.style.pointerEvents = 'all';
+      actRequestPaymentToggleHotspot.style.pointerEvents = 'all';
+      actRowDimmuBorgerRequestHotspot.style.pointerEvents = 'all';
+      actRowKerryKingRequest1Hotspot.style.pointerEvents = 'all';
+      actRowKerryKingRequest2Hotspot.style.pointerEvents = 'all';
+    }
+
+    function actToListViewPayment() {
+      if (isAnimating || flowState !== 'act-landing') return;
+      showActPaymentList();
+    }
+
+    function actPaymentBackToLanding() {
+      if (isAnimating || flowState !== 'act-list-view-payment') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_LANDING_ACTIVITY_IMAGE, 'act-landing');
+      actLandingActivityHotspot.style.pointerEvents = 'all';
+    }
+
+    function actPaymentToggleToRequest() {
+      if (isAnimating || flowState !== 'act-list-view-payment') return;
+      showActRequestList();
+    }
+
+    function actRequestBackToLanding() {
+      if (isAnimating || flowState !== 'act-list-view-request') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(SP_LANDING_ACTIVITY_IMAGE, 'act-landing');
+      actLandingActivityHotspot.style.pointerEvents = 'all';
+    }
+
+    function actRequestToggleToPayment() {
+      if (isAnimating || flowState !== 'act-list-view-request') return;
+      showActPaymentList();
+    }
+
+    function actProcessToDetail(fromState, detailImage, detailState) {
+      if (isAnimating || flowState !== fromState) return;
+      isAnimating = true;
+      actReturnListState = fromState;
+      flowState = 'act-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = detailImage;
+        flowState = detailState;
+        isAnimating = false;
+        actDetailBackHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function actToBourbonDetail()           { actProcessToDetail('act-list-view-payment', ACT_DETAIL_BOURBON_IMAGE, 'act-detail-bourbon'); }
+    function actToKerryKingPaymentDetail()   { actProcessToDetail('act-list-view-payment', ACT_DETAIL_KERRYKING_IMAGE, 'act-detail-kerryking'); }
+    function actToCigarPlaceDetail()         { actProcessToDetail('act-list-view-payment', ACT_DETAIL_CIGARPLACE_IMAGE, 'act-detail-cigarplace'); }
+    function actToDogWalkDetail()            { actProcessToDetail('act-list-view-payment', ACT_DETAIL_DOGWALK_IMAGE, 'act-detail-dogwalk'); }
+    function actToMetalManDetail()           { actProcessToDetail('act-list-view-payment', ACT_DETAIL_METALMAN_IMAGE, 'act-detail-metalman'); }
+    function actToDimmuBorgerRequestDetail() { actProcessToDetail('act-list-view-request', ACT_DETAIL_DIMMUBORGER_REQUEST_IMAGE, 'act-detail-dimmuborger-request'); }
+    function actToKerryKingDeniedDetail()    { actProcessToDetail('act-list-view-request', ACT_DETAIL_KERRYKING_DENIED_IMAGE, 'act-detail-kerryking-denied'); }
+
+    function actDetailBackToListView() {
+      if (isAnimating || !flowState.startsWith('act-detail-')) return;
+      if (actReturnListState === 'act-list-view-request') {
+        showActRequestList();
+      } else {
+        showActPaymentList();
+      }
+    }
+
+    function activateManageRecipients() {
+      activeUseCase = 'manage-recipients';
+      isAnimating = false;
+      disableCarouselZones();
+      disableAllPhoneHotspots();
+      setScreenInstant(MR_LANDING_IMAGE, 'mr-landing');
+      mrLandingIconHotspot.style.pointerEvents = 'all';
+    }
+
+    function mrShowList() {
+      disableAllPhoneHotspots();
+      setScreenInstant(MR_LIST_IMAGE, 'mr-list');
+      mrListBackHotspot.style.pointerEvents = 'all';
+      mrRowBourbonHotspot.style.pointerEvents = 'all';
+      mrRowCigarPlaceHotspot.style.pointerEvents = 'all';
+      mrRowDogWalkHotspot.style.pointerEvents = 'all';
+      mrRowMetalManHotspot.style.pointerEvents = 'all';
+    }
+
+    function mrProcessToList() {
+      if (isAnimating) return;
+      isAnimating = true;
+      flowState = 'mr-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        isAnimating = false;
+        mrShowList();
+      }, 1000);
+    }
+
+    function mrLandingToList() {
+      if (isAnimating || flowState !== 'mr-landing') return;
+      mrProcessToList();
+    }
+
+    function mrListBackToLanding() {
+      if (isAnimating || flowState !== 'mr-list') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(MR_LANDING_IMAGE, 'mr-landing');
+      mrLandingIconHotspot.style.pointerEvents = 'all';
+    }
+
+    function mrToDetail(detailImage, detailState) {
+      if (isAnimating || flowState !== 'mr-list') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(detailImage, detailState);
+      mrDetailBackHotspot.style.pointerEvents = 'all';
+    }
+
+    function mrToBourbonDetail()    { mrToDetail(MR_DETAIL_BOURBON_IMAGE, 'mr-detail-bourbon'); }
+    function mrToCigarPlaceDetail() { mrToDetail(MR_DETAIL_CIGARPLACE_IMAGE, 'mr-detail-cigarplace'); }
+    function mrToDogWalkDetail()    { mrToDetail(MR_DETAIL_DOGWALK_IMAGE, 'mr-detail-dogwalk'); }
+    function mrToMetalManDetail()   { mrToDetail(MR_DETAIL_METALMAN_IMAGE, 'mr-detail-metalman'); }
+
+    function mrDetailBackToList() {
+      if (isAnimating || !flowState.startsWith('mr-detail-')) return;
+      mrProcessToList();
+    }
+
+    function activatePreferences() {
+      activeUseCase = 'preferences';
+      isAnimating = false;
+      disableCarouselZones();
+      disableAllPhoneHotspots();
+      setScreenInstant(PREFS_LANDING_IMAGE, 'prefs-landing');
+      prefsLandingIconHotspot.style.pointerEvents = 'all';
+    }
+
+    function prefsLandingToPreferences() {
+      if (isAnimating || flowState !== 'prefs-landing') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(PREFS_IMAGE, 'prefs');
+      prefsManageProfilesRowHotspot.style.pointerEvents = 'all';
+      prefsBackHotspot.style.pointerEvents = 'all';
+    }
+
+    function prefsProcessToManageProfiles() {
+      if (isAnimating || flowState !== 'prefs') return;
+      isAnimating = true;
+      flowState = 'prefs-processing';
+      disableAllPhoneHotspots();
+
+      current.style.transition = 'opacity 300ms ease-in';
+      current.style.opacity = '0.5';
+
+      const phoneScreen = document.querySelector('.phone-screen');
+      const spinner = document.createElement('div');
+      spinner.id = 'spinner';
+      phoneScreen.appendChild(spinner);
+
+      spinnerTimerId = setTimeout(() => {
+        spinner.remove();
+        current.style.transition = 'none';
+        current.style.opacity = '1';
+        current.src = PREFS_MANAGE_PROFILES_IMAGE;
+        flowState = 'prefs-manage-profiles';
+        isAnimating = false;
+        prefsMgProfileRowHotspot.style.pointerEvents = 'all';
+        prefsBackHotspot.style.pointerEvents = 'all';
+      }, 1000);
+    }
+
+    function prefsToProfileDetails() {
+      if (isAnimating || flowState !== 'prefs-manage-profiles') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(PREFS_PROFILE_DETAILS_IMAGE, 'prefs-profile-details');
+      prefsAccountRowHotspot.style.pointerEvents = 'all';
+      prefsBackHotspot.style.pointerEvents = 'all';
+    }
+
+    function prefsToSelectAccount() {
+      if (isAnimating || flowState !== 'prefs-profile-details') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(PREFS_SELECT_ACCOUNT_IMAGE, 'prefs-select-account');
+      prefsSelectAccountBackHotspot.style.pointerEvents = 'all';
+    }
+
+    function prefsBack() {
+      if (isAnimating) return;
+      if (flowState === 'prefs') {
+        disableAllPhoneHotspots();
+        setScreenInstant(PREFS_LANDING_IMAGE, 'prefs-landing');
+        prefsLandingIconHotspot.style.pointerEvents = 'all';
+      } else if (flowState === 'prefs-manage-profiles') {
+        disableAllPhoneHotspots();
+        setScreenInstant(PREFS_IMAGE, 'prefs');
+        prefsManageProfilesRowHotspot.style.pointerEvents = 'all';
+        prefsBackHotspot.style.pointerEvents = 'all';
+      } else if (flowState === 'prefs-profile-details') {
+        disableAllPhoneHotspots();
+        setScreenInstant(PREFS_MANAGE_PROFILES_IMAGE, 'prefs-manage-profiles');
+        prefsMgProfileRowHotspot.style.pointerEvents = 'all';
+        prefsBackHotspot.style.pointerEvents = 'all';
+      }
+    }
+
+    function prefsSelectAccountBack() {
+      if (isAnimating || flowState !== 'prefs-select-account') return;
+      disableAllPhoneHotspots();
+      setScreenInstant(PREFS_PROFILE_DETAILS_IMAGE, 'prefs-profile-details');
+      prefsAccountRowHotspot.style.pointerEvents = 'all';
+      prefsBackHotspot.style.pointerEvents = 'all';
+    }
+
+    // ── Event listeners ──
+    clickZone.addEventListener('pointerdown', advance);
+    leftZone.addEventListener('pointerdown', retreat);
+    ctaHotspot.addEventListener('pointerdown', showTerms);
+    smbCtaHotspot.addEventListener('pointerdown', showTerms);
+    acceptHotspot.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      showChooseScreen();
+    });
+    smbAcceptHotspot.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      showSmbChooseScreen();
+    });
+    chooseRadioHotspot.addEventListener('pointerdown', swapToChooseReceive02);
+    chooseContinueHotspot.addEventListener('pointerdown', p2pToAuthOtp01);
+    smbAuthOtp01ContinueHotspot.addEventListener('pointerdown', p2pToAuthOtp02);
+    smbAuthOtp02ContinueHotspot.addEventListener('pointerdown', p2pProcessToSelectAccount01);
+    selectRadioHotspot.addEventListener('pointerdown', swapToSelectAccount02);
+    selectContinueHotspot.addEventListener('pointerdown', showProcessing);
+    congratsCTAHotspot.addEventListener('pointerdown', toZrcIntro);
+    zrcAccessHotspot.addEventListener('pointerdown', fromZrcIntro);
+    allowContacts01Hotspot.addEventListener('pointerdown', toAllowContacts02);
+    allowContacts02Hotspot.addEventListener('pointerdown', toHowShare);
+    howShareHotspot.addEventListener('pointerdown', toSelectContinue);
+    selectContinue06Hotspot.addEventListener('pointerdown', toAllow15);
+    allow15Hotspot.addEventListener('pointerdown', toLandingPage);
+
+    smbChooseRadioHotspot.addEventListener('pointerdown', smbSwapToChooseReceive02);
+    smbChooseContinueHotspot.addEventListener('pointerdown', smbToAuth03);
+    smbAuth03RadioHotspot.addEventListener('pointerdown', smbSwapToAuth04);
+    smbAuth04ContinueHotspot.addEventListener('pointerdown', smbToAuthOtp01);
+    smbAuthOtp01ContinueHotspot.addEventListener('pointerdown', smbToAuthOtp02);
+    smbAuthOtp02ContinueHotspot.addEventListener('pointerdown', smbProcessToCreateTag01);
+    smbCreateTag01ContinueHotspot.addEventListener('pointerdown', smbToCreateTag02);
+    smbCreateTag02ContinueHotspot.addEventListener('pointerdown', smbToCreateTag03);
+    smbCreateTag03CTAHotspot.addEventListener('pointerdown', smbToCreateTag04);
+    smbCreateTag04ContinueHotspot.addEventListener('pointerdown', smbToCreateTag05);
+    smbCreateTag05FinishHotspot.addEventListener('pointerdown', smbToSelectPrimary01);
+    smbSelectPrimaryRadioHotspot.addEventListener('pointerdown', smbToSelectPrimary02);
+    smbSelectPrimaryContinueHotspot.addEventListener('pointerdown', smbToCongrats);
+    smbCongratsCTAHotspot.addEventListener('pointerdown', smbToZrcIntro);
+    smbZelleTagIntroCTAHotspot.addEventListener('pointerdown', smbToContactsFlow);
+
+    spSendHotspot.addEventListener('pointerdown', spToScam01);
+    spScamCheckboxHotspot.addEventListener('pointerdown', spToScam02);
+    spScamGotItHotspot.addEventListener('pointerdown', spToRecipient01);
+    spRecipientNameHotspot.addEventListener('pointerdown', spToRecipient02);
+    spRecipientNextHotspot.addEventListener('pointerdown', spToRecipient03);
+    spRecipientZelleTagHotspot.addEventListener('pointerdown', spToRecipient04);
+    spRecipientAddContinueHotspot.addEventListener('pointerdown', spToRecipientSure);
+    spRecipientYesHotspot.addEventListener('pointerdown', spProcessToAmount01);
+    spAmountAreaHotspot.addEventListener('pointerdown', spToAmount02);
+    spAmountReviewHotspot.addEventListener('pointerdown', spProcessToReviewSend);
+    spReviewSendHotspot.addEventListener('pointerdown', spToOtp01);
+    spOtpAreaHotspot.addEventListener('pointerdown', spToOtp02);
+    spOtpVerifyHotspot.addEventListener('pointerdown', spToKeepSafe);
+    spKeepsafeSendHotspot.addEventListener('pointerdown', spProcessToPaymentSent);
+    spAllDoneHotspot.addEventListener('pointerdown', spToLandingPageEnd);
+
+    actLandingActivityHotspot.addEventListener('pointerdown', actToListViewPayment);
+    actPaymentBackHotspot.addEventListener('pointerdown', actPaymentBackToLanding);
+    actPaymentRequestToggleHotspot.addEventListener('pointerdown', actPaymentToggleToRequest);
+    actRowBourbonHotspot.addEventListener('pointerdown', actToBourbonDetail);
+    actRowKerryKingHotspot.addEventListener('pointerdown', actToKerryKingPaymentDetail);
+    actRowCigarPlaceHotspot.addEventListener('pointerdown', actToCigarPlaceDetail);
+    actRowDogWalkHotspot.addEventListener('pointerdown', actToDogWalkDetail);
+    actRowMetalManHotspot.addEventListener('pointerdown', actToMetalManDetail);
+    actRequestBackHotspot.addEventListener('pointerdown', actRequestBackToLanding);
+    actRequestPaymentToggleHotspot.addEventListener('pointerdown', actRequestToggleToPayment);
+    actRowDimmuBorgerRequestHotspot.addEventListener('pointerdown', actToDimmuBorgerRequestDetail);
+    actRowKerryKingRequest1Hotspot.addEventListener('pointerdown', actToKerryKingDeniedDetail);
+    actRowKerryKingRequest2Hotspot.addEventListener('pointerdown', actToKerryKingDeniedDetail);
+    actDetailBackHotspot.addEventListener('pointerdown', actDetailBackToListView);
+
+    mrLandingIconHotspot.addEventListener('pointerdown', mrLandingToList);
+    mrListBackHotspot.addEventListener('pointerdown', mrListBackToLanding);
+    mrRowBourbonHotspot.addEventListener('pointerdown', mrToBourbonDetail);
+    mrRowCigarPlaceHotspot.addEventListener('pointerdown', mrToCigarPlaceDetail);
+    mrRowDogWalkHotspot.addEventListener('pointerdown', mrToDogWalkDetail);
+    mrRowMetalManHotspot.addEventListener('pointerdown', mrToMetalManDetail);
+    mrDetailBackHotspot.addEventListener('pointerdown', mrDetailBackToList);
+
+    prefsLandingIconHotspot.addEventListener('pointerdown', prefsLandingToPreferences);
+    prefsManageProfilesRowHotspot.addEventListener('pointerdown', prefsProcessToManageProfiles);
+    prefsMgProfileRowHotspot.addEventListener('pointerdown', prefsToProfileDetails);
+    prefsAccountRowHotspot.addEventListener('pointerdown', prefsToSelectAccount);
+    prefsBackHotspot.addEventListener('pointerdown', prefsBack);
+    prefsSelectAccountBackHotspot.addEventListener('pointerdown', prefsSelectAccountBack);
+
+    // ── Radio use-case selection ──
+    document.querySelectorAll('input[name="use-case"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        activeUseCase = e.target.value;
+        if (e.target.value === 'enroll-smb') {
+          activateEnrollSMB();
+        } else if (e.target.value === 'send-payment') {
+          activateSendPayment();
+        } else if (e.target.value === 'activity') {
+          activateActivity();
+        } else if (e.target.value === 'manage-recipients') {
+          activateManageRecipients();
+        } else if (e.target.value === 'preferences') {
+          activatePreferences();
+        } else {
+          activateEnrollP2P();
+        }
+      });
+    });
+
+    // Initialize: lock screen state, all zones disabled
+    resetToLockScreen();
+  </script>
+</body>
+</html>
