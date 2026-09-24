@@ -25,24 +25,31 @@
       will-change: transform;
     }
 
-    /* ── Phone frame ── */
+    /* ── Phone frame (modern generic iPhone look) ── */
     .phone-frame {
       position: relative;
       width: 290px;
       height: 684px;
-      background: #1c1c1e;
-      border-radius: 44px;
-      box-shadow: 0 0 0 2px #3a3a3c, 0 20px 60px rgba(0, 0, 0, 0.6);
+      background: linear-gradient(160deg, #4a4a4d 0%, #232326 45%, #1c1c1e 100%);
+      border-radius: 62px;
+      box-shadow:
+        0 0 0 2px #57575a,
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 20px 60px rgba(0, 0, 0, 0.6);
       will-change: transform; /* own GPU layer — isolates from background */
     }
 
+    /* Dynamic-Island-style pill notch, floats above the screen content */
     .phone-notch {
-      position: relative;
-      width: 100px;
-      height: 24px;
-      background: #1c1c1e;
-      border-radius: 0 0 16px 16px;
-      margin: 0 auto;
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 96px;
+      height: 28px;
+      background: #000;
+      border-radius: 20px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
       z-index: 2;
     }
 
@@ -354,7 +361,7 @@
       pointer-events: none;
     }
 
-    /* ── Demo wrapper — panel + phone side-by-side ── */
+    /* ── Demo wrapper — icon column + phone side-by-side ── */
     .demo-wrapper {
       display: flex;
       flex-direction: row;
@@ -362,49 +369,44 @@
       gap: 32px;
     }
 
-    /* ── Use-case selection panel ── */
-    .use-case-panel {
+    /* ── Use-case icon column (left of phone) ── */
+    .usecase-icons {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      height: 684px;
+      padding: 8px 0;
+    }
+
+    .usecase-icon-btn {
       background: rgba(0, 0, 0, 0.55);
-      border-radius: 12px;
-      padding: 20px 24px;
-      color: #fff;
-      min-width: 180px;
-    }
-
-    .use-case-panel fieldset {
-      border: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .use-case-panel legend {
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.6);
-      margin-bottom: 14px;
-    }
-
-    .use-case-panel label {
+      border: 2px solid transparent;
+      border-radius: 20px;
+      padding: 10px;
+      cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 8px 0;
-      font-size: 0.95rem;
-      cursor: pointer;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      justify-content: center;
+      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
     }
 
-    .use-case-panel label:last-child {
-      border-bottom: none;
+    .usecase-icon-btn img {
+      width: 84px;
+      height: 84px;
+      display: block;
+      border-radius: 16px;
+      pointer-events: none;
     }
 
-    .use-case-panel input[type="radio"] {
-      accent-color: #6c47ff;
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
+    .usecase-icon-btn:hover {
+      transform: scale(1.06);
+      background: rgba(108, 71, 255, 0.35);
+    }
+
+    .usecase-icon-btn.active {
+      border-color: #6c47ff;
+      background: rgba(108, 71, 255, 0.45);
     }
   </style>
 </head>
@@ -412,17 +414,26 @@
 
   <div id="bg"></div>
   <div class="demo-wrapper">
-    <aside class="use-case-panel">
-      <fieldset>
-        <legend>Use Cases</legend>
-        <label><input type="radio" name="use-case" value="enroll-p2p"> P2P Enrollment</label>
-        <label><input type="radio" name="use-case" value="enroll-smb"> SMB Enrollment</label>
-        <label><input type="radio" name="use-case" value="send-payment"> Send Payment</label>
-        <label><input type="radio" name="use-case" value="activity"> Activity</label>
-        <label><input type="radio" name="use-case" value="manage-recipients"> Manage Recipients</label>
-        <label><input type="radio" name="use-case" value="preferences"> Preferences</label>
-      </fieldset>
-    </aside>
+    <nav class="usecase-icons" aria-label="Use case selection">
+      <button type="button" class="usecase-icon-btn" data-usecase="enroll-p2p" aria-label="P2P Enrollment">
+        <img src="images/Enrollment P2P Icon.png" alt="P2P Enrollment">
+      </button>
+      <button type="button" class="usecase-icon-btn" data-usecase="enroll-smb" aria-label="SMB Enrollment">
+        <img src="images/Enrollment SMB Icon.png" alt="SMB Enrollment">
+      </button>
+      <button type="button" class="usecase-icon-btn" data-usecase="send-payment" aria-label="Send Payment">
+        <img src="images/Send Payment Icon.png" alt="Send Payment">
+      </button>
+      <button type="button" class="usecase-icon-btn" data-usecase="activity" aria-label="Activity">
+        <img src="images/Activity Icon.png" alt="Activity">
+      </button>
+      <button type="button" class="usecase-icon-btn" data-usecase="manage-recipients" aria-label="Manage Recipients">
+        <img src="images/Manage Recipients Icon.png" alt="Manage Recipients">
+      </button>
+      <button type="button" class="usecase-icon-btn" data-usecase="preferences" aria-label="Preferences">
+        <img src="images/Preferences Icon.png" alt="Preferences">
+      </button>
+    </nav>
     <div class="phone-frame">
       <div class="phone-notch"></div>
       <div class="phone-screen">
@@ -1879,19 +1890,21 @@
     prefsBackHotspot.addEventListener('pointerdown', prefsBack);
     prefsSelectAccountBackHotspot.addEventListener('pointerdown', prefsSelectAccountBack);
 
-    // ── Radio use-case selection ──
-    document.querySelectorAll('input[name="use-case"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        activeUseCase = e.target.value;
-        if (e.target.value === 'enroll-smb') {
+    // ── Icon use-case selection ──
+    document.querySelectorAll('.usecase-icon-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const useCase = btn.dataset.usecase;
+        activeUseCase = useCase;
+        document.querySelectorAll('.usecase-icon-btn').forEach(b => b.classList.toggle('active', b === btn));
+        if (useCase === 'enroll-smb') {
           activateEnrollSMB();
-        } else if (e.target.value === 'send-payment') {
+        } else if (useCase === 'send-payment') {
           activateSendPayment();
-        } else if (e.target.value === 'activity') {
+        } else if (useCase === 'activity') {
           activateActivity();
-        } else if (e.target.value === 'manage-recipients') {
+        } else if (useCase === 'manage-recipients') {
           activateManageRecipients();
-        } else if (e.target.value === 'preferences') {
+        } else if (useCase === 'preferences') {
           activatePreferences();
         } else {
           activateEnrollP2P();
